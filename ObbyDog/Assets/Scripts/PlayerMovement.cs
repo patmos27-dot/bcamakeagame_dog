@@ -1,44 +1,55 @@
 using UnityEngine;
+using UnityEngine.InputSystem; // <- this is the new Input System
 
+[RequireComponent(typeof(Rigidbody))]
 public class PlayerMovement : MonoBehaviour
 {
     public float moveSpeed = 5f;
     public float jumpForce = 7f;
+
     private Rigidbody rb;
     private bool isGrounded;
 
-    void Start()
+    void Awake()
     {
         rb = GetComponent<Rigidbody>();
     }
 
     void Update()
     {
-        // Movement (WASD or Arrow keys)
-        float moveX = Input.GetAxis("Horizontal");
-        float moveZ = Input.GetAxis("Vertical");
-        Vector3 move = new Vector3(moveX, 0, moveZ) * moveSpeed;
-        Vector3 newVel = new Vector3(move.x, rb.linearVelocity.y, move.z);
-        rb.linearVelocity = newVel;
+        Vector2 input = Vector2.zero;
 
-        // Jump (spacebar)
-        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
+        // ----- Keyboard movement -----
+        if (Keyboard.current != null)
         {
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            if (Keyboard.current.wKey.isPressed) input.y += 1f;
+            if (Keyboard.current.sKey.isPressed) input.y -= 1f;
+            if (Keyboard.current.aKey.isPressed) input.x -= 1f;
+            if (Keyboard.current.dKey.isPressed) input.x += 1f;
+
+            if (Keyboard.current.spaceKey.wasPressedThisFrame && isGrounded)
+            {
+                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            }
         }
+
+        // Normalize so diagonal isn’t faster
+        input = Vector2.ClampMagnitude(input, 1f);
+
+        // Apply velocity
+        Vector3 move = new Vector3(input.x * moveSpeed, rb.linearVelocity.y, input.y * moveSpeed);
+        rb.linearVelocity = move;
     }
 
-    // Check if player is on the ground
-    void OnCollisionEnter(Collision collision)
+    private void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Ground"))
             isGrounded = true;
     }
 
-    void OnCollisionExit(Collision collision)
+    private void OnCollisionExit(Collision collision)
     {
         if (collision.gameObject.CompareTag("Ground"))
             isGrounded = false;
     }
 }
-
