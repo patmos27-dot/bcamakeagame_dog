@@ -1,55 +1,108 @@
 using UnityEngine;
-using UnityEngine.InputSystem; // <- this is the new Input System
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.Rendering;
 
-[RequireComponent(typeof(Rigidbody))]
 public class PlayerMovement : MonoBehaviour
 {
-    public float moveSpeed = 5f;
-    public float jumpForce = 7f;
+    //References:
+    public Transform orientation;
+    Rigidbody rb;
+    [SerializeField]
+    Animator animator;
 
-    private Rigidbody rb;
-    private bool isGrounded;
+    public GameObject welldone;
 
-    void Awake()
+    public float moveSpeed;
+    public float jumpForce;
+    public float groundDrag;
+    public float rotateSpeed;
+
+    float horizontalInput;
+    float verticalInput;
+    float rotationInput;
+    float yRotation;
+    Vector3 moveDirection;
+    bool isGrounded;
+
+    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    void Start()
     {
         rb = GetComponent<Rigidbody>();
+        rb.freezeRotation = true;
+
+        GameController.Instance.SetPlayerStartPosition(gameObject);
+        welldone.SetActive(false);
     }
 
+    // Update is called once per frame
     void Update()
     {
-        Vector2 input = Vector2.zero;
+        horizontalInput = Input.GetAxisRaw("Horizontal");
+        verticalInput = Input.GetAxisRaw("Vertical");
+        rotationInput = Input.GetAxisRaw("Mouse X");
 
-        // ----- Keyboard movement -----
-        if (Keyboard.current != null)
+        yRotation += rotationInput * Time.deltaTime * rotateSpeed;
+        orientation.rotation = Quaternion.Euler(0.0f, yRotation, 0.0f);
+
+        animator.SetFloat("Walk", verticalInput);
+        animator.SetFloat("Strafe", horizontalInput);
+        animator.SetBool("IsMoving", (Mathf.Abs(horizontalInput) > 0.0f || Mathf.Abs(verticalInput) > 0.0f));
+        //Process Jump
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
-            if (Keyboard.current.wKey.isPressed) input.y += 1f;
-            if (Keyboard.current.sKey.isPressed) input.y -= 1f;
-            if (Keyboard.current.aKey.isPressed) input.x -= 1f;
-            if (Keyboard.current.dKey.isPressed) input.x += 1f;
+            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+            rb.AddForce(transform.up * jumpForce, ForceMode.Impulse);
+        }
+    }
 
-            if (Keyboard.current.spaceKey.wasPressedThisFrame && isGrounded)
-            {
-                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            }
+    void FixedUpdate()
+    {
+        //Physics based movement
+        moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
+        rb.AddForce(moveDirection.normalized * moveSpeed * 10, ForceMode.Force);
+
+        //SPEED LIMIT
+        Vector3 flatVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+
+        if (flatVelocity.magnitude > moveSpeed)
+        {
+            Vector3 limitVelocity = flatVelocity.normalized * moveSpeed;
+            rb.linearVelocity = new Vector3(limitVelocity.x, rb.linearVelocity.y, limitVelocity.z);
         }
 
-        // Normalize so diagonal isn’t faster
-        input = Vector2.ClampMagnitude(input, 1f);
+        if (isGrounded)
+            rb.linearDamping = groundDrag;
+        else
+            rb.linearDamping = 0;
 
-        // Apply velocity
-        Vector3 move = new Vector3(input.x * moveSpeed, rb.linearVelocity.y, input.y * moveSpeed);
-        rb.linearVelocity = move;
     }
 
-    private void OnCollisionEnter(Collision collision)
+    private void OnTriggerEnter(Collider other)
     {
-        if (collision.gameObject.CompareTag("Ground"))
+        if(other.tag == "Ground")
+        {
             isGrounded = true;
+            Debug.Log("On Ground");
+        }
+
+        if (other.CompareTag("Finish"))
+        {
+            Hud.StopTimer();
+            welldone.SetActive(true);
+        }
+
+    }
+    private void OnTriggerExit(Collider other)
+    {
+        if(other.tag == "Ground")
+        {
+            isGrounded = false;
+            Debug.Log("Off Ground");
+        }
+            
     }
 
-    private void OnCollisionExit(Collision collision)
-    {
-        if (collision.gameObject.CompareTag("Ground"))
-            isGrounded = false;
-    }
 }
